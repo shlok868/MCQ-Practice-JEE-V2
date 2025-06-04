@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MCQ Practice JEE</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="container">
+        <aside id="side-panel"></aside>
+        <main id="main-content">
+            <header>
+                <h1>MCQ Practice JEE</h1>
+            </header>
+            <section id="question-section">
+                <img id="question-image" alt="Question Image" />
+                <form id="options-form">
+                    <label><input type="radio" name="option" value="1"> A</label>
+                    <label><input type="radio" name="option" value="2"> B</label>
+                    <label><input type="radio" name="option" value="3"> C</label>
+                    <label><input type="radio" name="option" value="4"> D</label>
+                </form>
+            </section>
+            <div id="status-bar">
+                <div id="question-status"></div>
+                <div id="answered-status"></div>
+            </div>
+            <div id="controls">
+                <button id="prev-btn">Previous</button>
+                <select id="question-select"></select>
+                <button id="next-btn">Next</button>
+            </div>
+            <div id="actions">
+                <button id="submit-btn">Submit</button>
+                <button id="save-btn">Save Answers</button>
+                <button id="load-btn">Load Answers</button>
+                <button id="clear-btn">Clear Saved</button>
+            </div>
+            <div id="result"></div>
+        </main>
+        <div id="custom-timer-window">
+            <div id="custom-timer-header">Timer</div>
+            <div id="timer-display">10:00</div>
+            <div id="timer-controls">
+                <input id="timer-minutes" type="number" min="0" max="99" placeholder="Min" style="width:40px;">
+                <input id="timer-seconds" type="number" min="0" max="59" placeholder="Sec" style="width:40px;">
+                <button id="timer-set">Set</button>
+                <button id="timer-start">Start</button>
+                <button id="timer-pause">Pause</button>
+                <button id="timer-stop">Stop</button>
+                <button id="timer-lap">Lap</button>
+            </div>
+            <ul id="timer-laps"></ul>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExamVault</title>
+    <link rel="stylesheet" href="mainstyle.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-icon">🗂️</span>
+                <span class="brand-title">Practice platform</span>
+            </div>
+            <div class="topbar-actions">
+                <button id="back-to-folders-btn" style="display:none;">← Back to Folders</button>
+                <!--<img src="https://randomuser.me/api/portraits/men/44.jpg" alt="Profile" class="profile-pic">-->
+            </div>
+        </header>
+        <div class="content">
+            <h1 class="main-title">My Exams</h1>
+            <div class="search-bar-row">
+                <input type="text" id="exam-search" placeholder="Search exams or folders..." />
+            </div>
+            <div class="section">
+                
+                <div id="subjects" class="folder-grid"></div>
+            </div>
+            <div class="section">
+                
+                <div id="other" class="folder-grid"></div>
+            </div>
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
