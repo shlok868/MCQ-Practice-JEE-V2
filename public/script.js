@@ -13,8 +13,7 @@ let questionsFolder = `data/${test}/`; // Path for ans.json (though ans.json is 
 let totalQuestions = 0; // Will be determined by the number of image/answer pairs from the sheet
 let currentQuestion = 0;
 let answers = []; // Stores the user's current session answers
-let answerKey = {}; // Will be populated from Google Sheet (column B)
-let submitted = false;
+let answerKey = {}; // Will be populated from Google Sheet (column B) - Note: Now derived from quizDataFromSheet
 
 // Array to store combined image URL and correct answer from the sheet
 let quizDataFromSheet = []; 
@@ -26,6 +25,18 @@ let customTimer = {
     running: false,
     laps: []
 };
+
+// Helper to convert 0-indexed column number to letter (0 -> A, 1 -> B, ...)
+// THIS FUNCTION WAS MISSING IN PREVIOUS exam.html SCRIPT!
+function colIndexToLetter(colIndex) {
+    let letter = '';
+    let temp = colIndex;
+    while (temp >= 0) {
+        letter = String.fromCharCode(65 + (temp % 26)) + letter;
+        temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
+}
 
 // Helper to convert 1-indexed column letter to 0-indexed index (A -> 0, B -> 1, ...)
 function colLetterToIndex(colLetter) {
@@ -189,13 +200,13 @@ async function fetchQuizDataFromSheet() {
     // Determine the range for questions and answers
     // Questions start from the row *below* the exam title, in the same column.
     // Answers are in the column to the right of the questions.
-    const startRowForQuestions = examTitleRow + 2; // +1 for 1-indexed, +1 for row below title
-    const startColLetter = String.fromCharCode(65 + examTitleCol); // Column of image URL
-    const endColLetter = String.fromCharCode(65 + examTitleCol + 1); // Column of correct answer
+    const startRowForQuestions = examTitleRow + 2; // +1 for 1-indexed, +1 for row below title (0-indexed array = 1-indexed row)
+    const startColLetter = colIndexToLetter(examTitleCol); // Column of image URL
+    const endColLetter = colIndexToLetter(examTitleCol + 1); // Column of correct answer
 
     // Define a large enough range to fetch all questions for this exam
-    // Assuming max 100 questions per exam for now, adjust if needed
-    const quizDataRange = `${startColLetter}${startRowForQuestions}:${endColLetter}${startRowForQuestions + 99}`; 
+    // Increased from +99 to +999 to fetch up to 1000 questions for the exam
+    const quizDataRange = `${startColLetter}${startRowForQuestions}:${endColLetter}${startRowForQuestions + 999}`; 
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${quizDataRange}?key=${apiKey}&valueRenderOption=UNFORMATTED_VALUE`;
@@ -211,10 +222,7 @@ async function fetchQuizDataFromSheet() {
 
         // Set the quiz title from the examCell itself
         if (sheetTitleElement) {
-            // Fetch the specific exam title from the fullSheetData (if available)
-            // This requires main.js to have fetched fullSheetData, and this examCell to be valid
-            // Alternatively, you could fetch this single cell value from the sheet here if fullSheetData isn't guaranteed
-            const examTitle = urlParams.get('examTitle') || "Quiz"; // Placeholder if not passed
+            const examTitle = urlParams.get('examTitle') || "Quiz"; // Get from URL param, fallback to "Quiz"
             sheetTitleElement.textContent = examTitle;
         }
 
