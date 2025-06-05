@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Sheet Cell Writer (OAuth 2.0)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Import Inter font from Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Write to Google Sheet (OAuth 2.0)</h1>
+
+        <p class="text-gray-600 text-sm mb-4">
+            First, sign in with your Google account to authorize access to your Google Sheets.
+        </p>
+
+        <button
+            id="authorizeButton"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75 transition duration-200 transform hover:scale-105 mb-4"
+        >
+            Sign In with Google
+        </button>
+
+        <div id="signedInContent" class="hidden">
+            <p class="text-green-600 text-sm mb-4">You are signed in! Enter a value below.</p>
+            <div class="mb-4">
+                <label for="cellValue" class="block text-gray-700 text-sm font-semibold mb-2">Value for A1 (Sheet 2):</label>
+                <input
+                    type="text"
+                    id="cellValue"
+                    class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200"
+                    placeholder="Enter text to write..."
+                />
+            </div>
+            <button
+                id="writeButton"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 transition duration-200 transform hover:scale-105"
+            >
+                Write to Sheet
+            </button>
+            <button
+                id="signOutButton"
+                class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-75 transition duration-200 transform hover:scale-105 mt-2"
+            >
+                Sign Out
+            </button>
+        </div>
+
+        <div id="message" class="mt-4 text-center font-medium"></div>
+
+        <script>
+            // --- Configuration for Google Sheet ---
+            // Your Google Sheet ID
+            const sheetId = '1qhAdWx619ipzojc_VSYkzRxPZcl24EYBZwcQgES5IYA';
+            // Your Google Cloud API Key (only for initial client loading if needed,
+            // not directly used for authenticated write operations via gapi.client.sheets)
+            const apiKey = 'AIzaSyBXGeD_pvVofRm_u74BG5Rt-CBHNB-Fh2I';
+
+            // --- IMPORTANT: REPLACE THIS WITH YOUR ACTUAL CLIENT ID ---
+            const CLIENT_ID = '882292954923-40srnuauldjt86n3td9rg2n2ak79e9uh.apps.googleusercontent.com'; // e.g., '123456789012-abcdefg12345.apps.googleusercontent.com'
+            // --- END OF IMPORTANT CONFIGURATION ---
+
+            // Scopes required for writing to Google Sheets
+            // 'https://www.googleapis.com/auth/spreadsheets' grants full read/write access.
+            const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+            const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+
+            // --- Get references to HTML elements ---
+            const authorizeButton = document.getElementById('authorizeButton');
+            const signOutButton = document.getElementById('signOutButton');
+            const signedInContent = document.getElementById('signedInContent');
+            const cellValueInput = document.getElementById('cellValue');
+            const writeButton = document.getElementById('writeButton');
+            const messageDiv = document.getElementById('message');
+
+            let gapiInited = false;
+            let gisInited = false;
+
+            // --- Event Listeners ---
+            authorizeButton.onclick = handleAuthClick;
+            signOutButton.onclick = handleSignoutClick;
+            writeButton.addEventListener('click', writeToSheet);
+
+            /**
+             * Callback function called when the Google API client library is loaded.
+             * Initializes gapi.client with the Sheets API.
+             */
+            function gapiLoaded() {
+                gapi.load('client', initializeGapiClient);
+            }
+
+            /**
+             * Initializes the Google API client.
+             */
+            async function initializeGapiClient() {
+                await gapi.client.init({
+                    apiKey: apiKey, // The API key is still used for identifying the project
+                    discoveryDocs: DISCOVERY_DOCS,
+                });
+                gapiInited = true;
+                maybeEnableButtons();
+            }
+
+            /**
+             * Callback function called when the Google Identity Services library is loaded.
+             * Initializes the sign-in client.
+             */
+            function gisLoaded() {
+                google.accounts.id.initialize({
+                    client_id: CLIENT_ID,
+                    callback: tokenClientCallback, // This callback is triggered after a successful sign-in
+                });
+                gisInited = true;
+                maybeEnableButtons();
+            }
+
+            let tokenClient;
+            /**
+             * Handles the callback from the Google Identity Services sign-in.
+             * @param {Object} resp The response object containing the access token.
+             */
+            function tokenClientCallback(resp) {
+                if (resp.error) {
+                    messageDiv.textContent = `Error during sign-in: ${resp.error}`;
+                    messageDiv.className = 'mt-4 text-center font-medium text-red-600';
+                    return;
+                }
+                gapi.client.setToken(resp); // Set the received token for gapi.client requests
+                updateSigninStatus(true); // Update UI to reflect signed-in status
+            }
+
+            /**
+             * Handles the sign-in button click.
+             * Requests an access token if not already signed in.
+             */
+            function handleAuthClick() {
+                // `tokenClient` is initialized in `gisLoaded`
+                if (!tokenClient) {
+                    tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: CLIENT_ID,
+                        scope: SCOPES,
+                        callback: tokenClientCallback,
+                    });
+                }
+                tokenClient.requestAccessToken(); // Request an access token
+            }
+
+            /**
+             * Handles the sign-out button click.
+             */
+            function handleSignoutClick() {
+                // Revoke the current token to sign out
+                google.accounts.oauth2.revoke(gapi.client.getToken().access_token, () => {
+                    console.log('Access token revoked.');
+                    gapi.client.setToken(''); // Clear the token from gapi.client
+                    updateSigninStatus(false); // Update UI to reflect signed-out status
+                });
+            }
+
+            /**
+             * Updates the UI based on the sign-in status.
+             * @param {boolean} isSignedIn True if the user is signed in, false otherwise.
+             */
+            function updateSigninStatus(isSignedIn) {
+                if (isSignedIn) {
+                    authorizeButton.classList.add('hidden');
+                    signedInContent.classList.remove('hidden');
+                } else {
+                    authorizeButton.classList.remove('hidden');
+                    signedInContent.classList.add('hidden');
+                    messageDiv.textContent = ''; // Clear messages when signed out
+                    cellValueInput.value = ''; // Clear input
+                }
+            }
+
+            /**
+             * Enables buttons once both gapi and gis are initialized.
+             */
+            function maybeEnableButtons() {
+                if (gapiInited && gisInited) {
+                    // Check initial sign-in status if user previously granted consent
+                    // This is more complex with GIS's implicit flow, but we can set UI to initial state.
+                    updateSigninStatus(gapi.client.getToken() !== null);
+                }
+            }
+
+
+            /**
+             * Writes the value from the textbox to cell A1 of Sheet2.
+             */
+            async function writeToSheet() {
+                const value = cellValueInput.value;
+
+                // Basic validation: check if the input is not empty
+                if (!value) {
+                    messageDiv.textContent = 'Please enter a value to write.';
+                    messageDiv.className = 'mt-4 text-center font-medium text-red-600';
+                    return;
+                }
+
+                // Check if user is signed in
+                if (!gapi.client.getToken() || !gapi.client.getToken().access_token) {
+                    messageDiv.textContent = 'Please sign in first.';
+                    messageDiv.className = 'mt-4 text-center font-medium text-red-600';
+                    return;
+                }
+
+                messageDiv.textContent = 'Writing...';
+                messageDiv.className = 'mt-4 text-center font-medium text-blue-600';
+
+                try {
+                    // Use gapi.client.sheets.spreadsheets.values.update for authenticated write
+                    const response = await gapi.client.sheets.spreadsheets.values.update({
+                        spreadsheetId: sheetId,
+                        range: 'Sheet2!A1',
+                        valueInputOption: 'RAW',
+                        values: [[value]],
+                    });
+
+                    // Check if the response indicates success
+                    if (response.status === 200) { // HTTP 200 OK
+                        messageDiv.textContent = 'Successfully wrote to Sheet2!A1!';
+                        messageDiv.className = 'mt-4 text-center font-medium text-green-600';
+                        console.log('API Response:', response.result);
+                        cellValueInput.value = '';
+                    } else {
+                        // Handle non-200 responses
+                        messageDiv.textContent = `Error writing to sheet: ${response.result.error.message || 'Unknown error'}`;
+                        messageDiv.className = 'mt-4 text-center font-medium text-red-600';
+                        console.error('Error writing to sheet:', response.result.error);
+                    }
+                } catch (error) {
+                    // Catch network or API errors
+                    messageDiv.textContent = `Error: ${error.message}. Please ensure your API key, client ID, and permissions are correct.`;
+                    messageDiv.className = 'mt-4 text-center font-medium text-red-600';
+                    console.error('Sheets API Error:', error);
+                }
+            }
+        </script>
+        <!-- Load the Google API Client Library -->
+        <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+        <!-- Load the Google Identity Services Library -->
+        <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    </div>
+</body>
+</html>
