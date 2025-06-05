@@ -11,7 +11,7 @@ let currentFolderContext = {
     path: [], // e.g., ["Physics Modules", "Electrostatics"] - current navigation path
     scanRow: 1, // The 1-indexed row number to scan for items at the current level
     startCol: 0, // 0-indexed column index where current branch starts
-    endCol: 25 // 0-indexed column index where current branch ends (e.g., 25 for 'Z')
+    endCol: 16383 // Default to max column in Google Sheets (XFD, 0-indexed)
 };
 
 // Helper to convert 0-indexed column number to letter (0 -> A, 1 -> B, ...)
@@ -41,8 +41,9 @@ function colLetterToIndex(colLetter) {
 async function fetchNavigationData() {
     try {
         // Fetch a sufficiently large range to cover your entire navigation structure
-        // Adjust 'Z500' if your sheet is wider or deeper
-        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z500?key=${apiKey}&valueRenderOption=UNFORMATTED_VALUE`);
+        // Changed from Z500 to XFD500 to cover all possible columns in Google Sheets (XFD is the last column).
+        // Adjust 500 if your navigation structure goes deeper than 500 rows.
+        const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:XFD500?key=${apiKey}&valueRenderOption=UNFORMATTED_VALUE`);
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -51,8 +52,7 @@ async function fetchNavigationData() {
         console.log("Full Sheet Navigation Data Fetched:", fullSheetData);
     } catch (error) {
         console.error("Error fetching navigation data from Google Sheet:", error);
-        // Replaced alert with console.error as per previous instructions
-        console.error("Failed to load navigation data. Check sheet ID, API key, and network."); 
+        console.error("Failed to load navigation data. Check sheet ID, API key, and network.");
     }
 }
 
@@ -66,27 +66,37 @@ async function loadFolders(pathArray = []) {
 
     // Determine the column boundaries for the current branch based on the parent folder
     let branchStartCol = 0;
-    let branchEndCol = 25; // Default to max column 'Z' (0-indexed)
+    let branchEndCol = 16383; // Default to max column 'XFD' (0-indexed)
 
     if (pathArray.length > 0) { // If not at the root level, determine boundaries from parent
-        let currentScanRowForParent = 1; // Start scanning from Row 1 for the parent
+        let currentScanRowForParent = 1; // Start scanning from Row 1 for the parent (1-indexed for logging)
         let currentScanStartColForParent = 0;
-        let currentScanEndColForParent = 25; // Max column for parent search
+        let currentScanEndColForParent = 16383; // Max column for parent search
 
         for (let i = 0; i < pathArray.length; i++) {
             const folderNameInPath = pathArray[i];
             let foundParent = false;
-            if (!fullSheetData[currentScanRowForParent - 1]) break; // Parent row doesn't exist (0-indexed)
+            // Check if the parent row exists in fullSheetData (0-indexed array access)
+            if (!fullSheetData[currentScanRowForParent - 1]) {
+                console.error(`Parent row ${currentScanRowForParent} does not exist for path segment: ${folderNameInPath}`);
+                break;
+            }
 
-            for (let col = currentScanStartColForParent; col <= currentScanEndColForParent; col++) {
-                if (fullSheetData[currentScanRowForParent - 1][col] === folderNameInPath) {
+            // Ensure we don't go out of bounds for the current row's actual data length
+            const currentRowData = fullSheetData[currentScanRowForParent - 1] || [];
+            const actualEndColForParent = Math.min(currentScanEndColForParent, currentRowData.length - 1);
+
+            for (let col = currentScanStartColForParent; col <= actualEndColForParent; col++) {
+                if (currentRowData[col] === folderNameInPath) {
                     branchStartCol = col; // This is the start column for the children
                     
                     // Find the endCol for this branch: next non-empty cell in the *same row*
                     // This defines the horizontal extent of the current folder's children
                     let nextSiblingCol = currentScanEndColForParent; // Default to current max
-                    for (let siblingCol = col + 1; siblingCol <= currentScanEndColForParent; siblingCol++) {
-                        if (fullSheetData[currentScanRowForParent - 1] && fullSheetData[currentScanRowForParent - 1][siblingCol]) {
+                    
+                    // Iterate through the current row's data to find the next sibling's column
+                    for (let siblingCol = col + 1; siblingCol < currentRowData.length; siblingCol++) {
+                        if (currentRowData[siblingCol]) { // If a cell has content
                             nextSiblingCol = siblingCol - 1; // Column before the next sibling
                             break;
                         }
@@ -94,9 +104,9 @@ async function loadFolders(pathArray = []) {
                     branchEndCol = nextSiblingCol;
 
                     // Update context for next iteration (if any) to find the next parent in path
-                    currentScanRowForParent++; 
-                    currentScanStartColForParent = branchStartCol;
-                    currentScanEndColForParent = branchEndCol;
+                    currentScanRowForParent++; // Move to the next row (children's row)
+                    currentScanStartColForParent = branchStartCol; // Children start from the parent's column
+                    currentScanEndColForParent = branchEndCol; // Children's horizontal scan is limited by parent's branch end
                     foundParent = true;
                     break;
                 }
@@ -116,15 +126,20 @@ async function loadFolders(pathArray = []) {
     subjectsDiv.innerHTML = ""; // Clear previous content
 
     const itemsAtCurrentLevel = [];
-    // Check if the row to scan for current items exists (0-indexed)
+    // Check if the row to scan for current items exists (0-indexed array access)
     if (fullSheetData[currentFolderContext.scanRow - 1]) { 
-        for (let col = currentFolderContext.startCol; col <= currentFolderContext.endCol; col++) {
-            const cellContent = fullSheetData[currentFolderContext.scanRow - 1][col];
+        const currentRowData = fullSheetData[currentFolderContext.scanRow - 1] || [];
+        // Ensure we don't go out of bounds for the current row's actual data length
+        const actualScanEndCol = Math.min(currentFolderContext.endCol, currentRowData.length - 1);
+
+        for (let col = currentFolderContext.startCol; col <= actualScanEndCol; col++) {
+            const cellContent = currentRowData[col];
             if (cellContent) { // If cell has content
                 // Heuristic to determine if it's an exam:
                 // An item is an exam if the cell directly below it (in the next row, same column)
                 // contains content that starts with 'http' (indicating a question image URL).
-                const contentBelow = fullSheetData[currentFolderContext.scanRow] ? fullSheetData[currentFolderContext.scanRow][col] : undefined;
+                const nextRowData = fullSheetData[currentFolderContext.scanRow]; // Next row data
+                const contentBelow = (nextRowData && nextRowData[col]) ? nextRowData[col] : undefined;
                 const isExam = (contentBelow && typeof contentBelow === 'string' && contentBelow.startsWith('http')); 
 
                 if (isExam) {
@@ -138,7 +153,7 @@ async function loadFolders(pathArray = []) {
                     itemsAtCurrentLevel.push({
                         type: 'folder',
                         name: cellContent,
-                        cell: `${colIndexToLetter(col)}${currentFolderContext.scanRow}` // Storing for consistency, though not strictly needed for folders
+                        cell: `${colIndexToLetter(col)}${currentFolderContext.scanRow}` // Storing for consistency
                     });
                 }
             }
@@ -148,7 +163,7 @@ async function loadFolders(pathArray = []) {
     // Render folders and exams
     itemsAtCurrentLevel.forEach(item => {
         const card = document.createElement("div");
-        card.className = "folder-card"; // Reusing class name from your original main.js
+        card.className = "folder-card";
 
         const icon = document.createElement("img");
         icon.className = "folder-icon";
@@ -159,15 +174,14 @@ async function loadFolders(pathArray = []) {
 
         if (item.type === 'folder') {
             icon.src = folderIconUrl;
-            // Recursively call loadFolders with the new path
             card.onclick = () => loadFolders([...pathArray, item.name]);
         } else { // type === 'exam'
             icon.src = examIconUrl;
             title.style.fontWeight = "700";
             title.style.color = "#fff";
             card.onclick = () => {
-                // Navigate to exam.html, passing the original folder path AND the exam's cell location
-                window.location.href = `exam.html?folder=${encodeURIComponent(pathArray.join('/'))}&examCell=${encodeURIComponent(item.cell)}`;
+                // Navigate to exam.html, passing the original folder path, the exam's cell location, and the exam title
+                window.location.href = `exam.html?folder=${encodeURIComponent(pathArray.join('/'))}&examCell=${encodeURIComponent(item.cell)}&examTitle=${encodeURIComponent(item.name)}`;
             };
         }
 
@@ -188,7 +202,7 @@ document.getElementById('back-to-folders-btn').onclick = function() {
     loadFolders(newPath);
 };
 
-// Search logic (optional, simple folder/exam name filter) - kept as is
+// Search logic (optional, simple folder/exam name filter)
 document.getElementById("exam-search").addEventListener("input", (e) => {
     const query = e.target.value.toLowerCase();
     Array.from(document.querySelectorAll('.folder-card')).forEach(card => {
