@@ -1,5 +1,0 @@
-
-{
-  "name": "OCR Answer Key Converter",
-  "description": "An application to extract multiple-choice answers from an image using AI, convert letter choices (a,b,c,d) to numbers (1,2,3,4), and display them as a single-line, comma-separated list."
-}
