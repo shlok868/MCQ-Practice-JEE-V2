@@ -13,10 +13,10 @@ let questionsFolder = `data/${test}/`; // Path for ans.json (though ans.json is 
 let totalQuestions = 0; // Will be determined by the number of image/answer pairs from the sheet
 let currentQuestion = 0;
 let answers = []; // Stores the user's current session answers
-let answerKey = {}; // Will be populated from Google Sheet (column B) - Note: Now derived from quizDataFromSheet
+let submitted = false; // Flag to track if the quiz has been submitted
 
 // Array to store combined image URL and correct answer from the sheet
-let quizDataFromSheet = []; 
+let quizDataFromSheet = [];
 
 let customTimer = {
     totalSeconds: 600,
@@ -27,7 +27,6 @@ let customTimer = {
 };
 
 // Helper to convert 0-indexed column number to letter (0 -> A, 1 -> B, ...)
-// THIS FUNCTION WAS MISSING IN PREVIOUS exam.html SCRIPT!
 function colIndexToLetter(colIndex) {
     let letter = '';
     let temp = colIndex;
@@ -64,8 +63,8 @@ function parseCellReference(cellRef) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize quiz by fetching data from Google Sheet
-    await fetchQuizDataFromSheet(); 
-    
+    await fetchQuizDataFromSheet();
+
     document.getElementById('next-btn').addEventListener('click', () => {
         saveCurrentAnswerToLocalArray(); // Save current question's answer to local array
         if (currentQuestion < totalQuestions - 1) {
@@ -85,9 +84,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('submit-btn').addEventListener('click', () => {
         saveCurrentAnswerToLocalArray(); // Save current question's answer to local array
         checkResults();
-        submitted = true;
-        updateSidePanel();
-        clearInterval(customTimer.interval); 
+        submitted = true; // Set submitted flag to true
+        updateSidePanel(); // Update side panel colors after submission
+        clearInterval(customTimer.interval);
     });
 
     document.getElementById('question-select').addEventListener('change', (event) => {
@@ -139,6 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         .then(res => res.json())
         .then(data => {
             answers = Array(totalQuestions).fill(null);
+            submitted = false; // Reset submitted flag on clear
             loadQuestion(currentQuestion);
             updateSidePanel();
             console.log('Saved answers cleared via backend:', data);
@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // Timer event listeners (kept as is)
+    // Timer event listeners
     document.getElementById('timer-set').addEventListener('click', setCustomTimer);
     document.getElementById('timer-start').addEventListener('click', startCustomTimer);
     document.getElementById('timer-pause').addEventListener('click', pauseCustomTimer);
@@ -156,13 +156,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('timer-lap').addEventListener('click', lapCustomTimer);
 });
 
-// Make the timer window draggable (kept as is)
+// Make the timer window draggable
 (function() {
     const timerWindow = document.getElementById('custom-timer-window');
     const header = document.getElementById('custom-timer-header');
     let offsetX = 0, offsetY = 0, isDown = false;
 
-    if (!timerWindow || !header) return; 
+    if (!timerWindow || !header) return;
 
     header.addEventListener('mousedown', function(e) {
         isDown = true;
@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // --- Quiz Data Fetching from Google Sheet based on examCell ---
 async function fetchQuizDataFromSheet() {
-    const sheetTitleElement = document.getElementById('sheetTitle'); 
+    const sheetTitleElement = document.getElementById('sheetTitle');
     const parsedCell = parseCellReference(examCell);
 
     if (!parsedCell) {
@@ -206,7 +206,7 @@ async function fetchQuizDataFromSheet() {
 
     // Define a large enough range to fetch all questions for this exam
     // Increased from +99 to +999 to fetch up to 1000 questions for the exam
-    const quizDataRange = `${startColLetter}${startRowForQuestions}:${endColLetter}${startRowForQuestions + 999}`; 
+    const quizDataRange = `${startColLetter}${startRowForQuestions}:${endColLetter}${startRowForQuestions + 999}`;
 
     try {
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${quizDataRange}?key=${apiKey}&valueRenderOption=UNFORMATTED_VALUE`;
@@ -240,7 +240,7 @@ async function fetchQuizDataFromSheet() {
                     if (fileIdMatch) {
                         processedUrl = `https://drive.google.com/uc?id=${fileIdMatch[1]}`;
                     }
-                    
+
                     // Replace 'uc' with 'thumbnail' if present
                     processedUrl = processedUrl.replace('/uc?', '/thumbnail?');
 
@@ -268,7 +268,7 @@ async function fetchQuizDataFromSheet() {
             answers = Array(totalQuestions).fill(null); // Initialize user answers array
             populateQuestionSelect();
             populateSidePanel();
-            
+
             if (quizDataFromSheet.length === 0) {
                 console.warn(`No valid image/answer pairs found in range ${quizDataRange} after processing.`);
             }
@@ -276,7 +276,7 @@ async function fetchQuizDataFromSheet() {
     } catch (err) {
         console.error("Error fetching quiz data from sheet:", err);
         if (sheetTitleElement) sheetTitleElement.textContent = "Failed to load quiz questions.";
-        quizDataFromSheet = []; 
+        quizDataFromSheet = [];
         totalQuestions = 0; // Reset total questions on error
         answers = []; // Reset answers
     } finally {
@@ -292,6 +292,8 @@ function saveCurrentAnswerToLocalArray() {
     if (selectedOption) {
         answers[currentQuestion] = parseInt(selectedOption.value);
     }
+    // Call updateSidePanel immediately after saving an answer
+    updateSidePanel();
 }
 
 function populateQuestionSelect() {
@@ -319,12 +321,12 @@ function populateSidePanel() {
         });
         sidePanel.appendChild(button);
     }
-    updateSidePanel();
+    updateSidePanel(); // Initial update after populating buttons
 }
 
 function loadQuestion(index) {
     const questionImage = document.getElementById('question-image');
-    
+
     // Use the URL from quizDataFromSheet array
     if (quizDataFromSheet.length > 0 && quizDataFromSheet[index] && quizDataFromSheet[index].imageUrl) {
         const imageUrlToDisplay = quizDataFromSheet[index].imageUrl;
@@ -334,9 +336,9 @@ function loadQuestion(index) {
         questionImage.style.display = 'block'; // Ensure image is visible
     } else {
         // Fallback if no image URL from sheet or index out of bounds
-        questionImage.src = 'https://placehold.co/600x400/333/eee?text=Image+Not+Found'; 
+        questionImage.src = 'https://placehold.co/600x400/333/eee?text=Image+Not+Found';
         questionImage.alt = 'Image not found or no URL available from sheet';
-        questionImage.style.display = 'block'; 
+        questionImage.style.display = 'block';
         console.warn(`No image URL found in Google Sheet for question ${index + 1}.`);
     }
 
@@ -355,21 +357,46 @@ function loadQuestion(index) {
     document.getElementById('answered-status').textContent = `Answered: ${answers.filter(a => a !== null).length}`;
     document.getElementById('question-select').value = index;
 
-    updateSidePanel();
+    updateSidePanel(); // Update side panel to highlight current question and colors
 }
 
 function updateSidePanel() {
     const buttons = document.querySelectorAll('.question-button');
     buttons.forEach((button, index) => {
-        // Ensure quizDataFromSheet has data for this index before checking answer
-        if (answers[index] !== null && quizDataFromSheet[index] && quizDataFromSheet[index].correctAnswer !== null) {
-            if (submitted && answers[index] !== quizDataFromSheet[index].correctAnswer) {
-                button.style.backgroundColor = 'red';
+        // Check if an answer has been attempted for this question
+        const hasAttempted = answers[index] !== null;
+
+        if (submitted) {
+            // After submission: green if correct, red if wrong
+            // We need quizDataFromSheet[index] to exist and have a correctAnswer to check correctness
+            if (hasAttempted && quizDataFromSheet[index] && answers[index] === quizDataFromSheet[index].correctAnswer) {
+                button.style.backgroundColor = 'green'; // Correct answer
+                button.style.color = 'white'; // White text for visibility
+            } else if (hasAttempted) {
+                button.style.backgroundColor = 'red'; // Incorrect answer (or attempted without a valid correct answer to compare)
+                button.style.color = 'white'; // White text for visibility
             } else {
-                button.style.backgroundColor = 'green';
+                button.style.backgroundColor = 'white'; // Not attempted
+                button.style.color = 'black'; // Black text for visibility
             }
         } else {
-            button.style.backgroundColor = 'white';
+            // Before submission: green if attempted, white if not
+            if (hasAttempted) {
+                button.style.backgroundColor = 'green'; // Using lightgreen for attempted before submission
+                button.style.color = 'black';
+            } else {
+                button.style.backgroundColor = 'white'; // Not attempted
+                button.style.color = 'black';
+            }
+        }
+
+        // Highlight the current question button
+        if (index === currentQuestion) {
+            button.style.border = '2px solid blue'; // Highlight active question
+            button.style.fontWeight = 'bold';
+        } else {
+            button.style.border = '1px solid #ccc'; // Reset border for others
+            button.style.fontWeight = 'normal';
         }
     });
 }
@@ -412,6 +439,12 @@ function startCustomTimer() {
             updateTimerDisplay();
         } else {
             stopCustomTimer();
+            // Optional: alert or visual cue when timer runs out
+            alert("Time's up!");
+            // Automatically submit the quiz if time runs out
+            if (!submitted) {
+                document.getElementById('submit-btn').click();
+            }
         }
     }, 1000);
 }
