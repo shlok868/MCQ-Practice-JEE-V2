@@ -1,3 +1,79 @@
+// Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyB1g8_jvDt5NSTHHf6Iz1mEaUAfWFHXhFc",
+    authDomain: "exam-practice-133.firebaseapp.com",
+    projectId: "exam-practice-133",
+    storageBucket: "exam-practice-133.firebasestorage.app",
+    messagingSenderId: "360770636796",
+    appId: "1:360770636796:web:3c046ac1122c3d12df0079"
+  };
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Auth state observer
+auth.onAuthStateChanged((user) => {
+    if (user) {
+        // User is signed in
+        document.getElementById('auth-buttons').style.display = 'none';
+        document.getElementById('user-info').style.display = 'flex';
+        document.getElementById('user-email').textContent = user.email;
+    } else {
+        // User is signed out
+        document.getElementById('auth-buttons').style.display = 'block';
+        document.getElementById('user-info').style.display = 'none';
+    }
+});
+
+// Auth modal functionality
+let currentAuthMode = 'login'; // or 'register'
+
+document.getElementById('login-btn').addEventListener('click', () => {
+    currentAuthMode = 'login';
+    document.getElementById('modal-title').textContent = 'Login';
+    document.getElementById('auth-modal').style.display = 'block';
+});
+
+document.getElementById('register-btn').addEventListener('click', () => {
+    currentAuthMode = 'register';
+    document.getElementById('modal-title').textContent = 'Register';
+    document.getElementById('auth-modal').style.display = 'block';
+});
+
+document.getElementById('modal-cancel-btn').addEventListener('click', () => {
+    document.getElementById('auth-modal').style.display = 'none';
+});
+
+document.getElementById('modal-submit-btn').addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+
+    try {
+        if (currentAuthMode === 'login') {
+            await auth.signInWithEmailAndPassword(email, password);
+        } else {
+            await auth.createUserWithEmailAndPassword(email, password);
+        }
+        document.getElementById('auth-modal').style.display = 'none';
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+    auth.signOut();
+});
+
+// Close modal when clicking outside
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('auth-modal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+});
+
 // Google Sheets API configuration for navigation data (READ-ONLY)
 const sheetId = '1qhAdWx619ipzojc_VSYkzRxPZcl24EYBZwcQgES5IYA'; // Your Google Sheet ID for navigation
 const apiKey = 'AIzaSyBXGeD_pvVofRm_u74BG5Rt-CBHNB-Fh2I';   // Your Google Sheets API Key (for read-only access)

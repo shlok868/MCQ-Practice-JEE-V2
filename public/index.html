@@ -12,28 +12,52 @@
         <header class="topbar">
             <div class="brand">
                 <span class="brand-icon">🗂️</span>
-                <span class="brand-title">Practice platform</span>
+                <span class="brand-title">Practice</span>
             </div>
             <div class="topbar-actions">
+                
                 <button id="back-to-folders-btn" style="display:none;">← Back to Folders</button>
-                <!--<img src="https://randomuser.me/api/portraits/men/44.jpg" alt="Profile" class="profile-pic">-->
+                <!-- Add auth buttons -->
+                <div id="auth-buttons">
+                    <button id="login-btn" class="auth-btn">Login</button>
+                    <button id="register-btn" class="auth-btn">Register</button>
+                </div>
+                <div id="user-info" style="display: none;">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="auth-btn">Logout</button>
+                </div>
             </div>
         </header>
+        <!-- Add auth modal -->
+        <div id="auth-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2 id="modal-title">Login</h2>
+                <input type="email" id="email" placeholder="Email">
+                <input type="password" id="password" placeholder="Password">
+                <button id="modal-submit-btn">Submit</button>
+                <button id="modal-cancel-btn">Cancel</button>
+            </div>
+        </div>
         <div class="content">
             <h1 class="main-title">My Exams</h1>
             <div class="search-bar-row">
                 <input type="text" id="exam-search" placeholder="Search exams or folders..." />
             </div>
             <div class="section">
-                
                 <div id="subjects" class="folder-grid"></div>
             </div>
             <div class="section">
-                
                 <div id="other" class="folder-grid"></div>
             </div>
         </div>
     </div>
+    <!-- Add Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="main.js"></script>
+    <footer style="text-align:center; margin-top: 32px; color: #888; font-size: 0.95em;">
+        &copy; 2025 Shlok Dalvi
+    </footer>
 </body>
 </html>

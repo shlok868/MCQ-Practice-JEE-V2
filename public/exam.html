@@ -10,7 +10,14 @@
         <aside id="side-panel"></aside>
         <main id="main-content">
             <header>
-                <h1>MCQ Practice JEE</h1>
+                <button id="home-btn" class="auth-btn" title="Home">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7"/><path d="M9 22V12H15V22"/></svg>
+                </button>
+                <h1 style="display: inline-block; margin-left: 16px;"><span id="exam-title">MCQ Practice JEE</span></h1>
+                <div id="user-info" style="display: none;">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="auth-btn">Logout</button>
+                </div>
             </header>
             <section id="question-section">
                 <img id="question-image" alt="Question Image" />
@@ -33,8 +40,6 @@
             <div id="actions">
                 <button id="submit-btn">Submit</button>
                 <button id="save-btn">Save Answers</button>
-                <!--<button id="load-btn">Load Answers</button>
-                <button id="clear-btn">Clear Saved</button>-->
             </div>
             <div id="result"></div>
         </main>
@@ -53,6 +58,12 @@
             <ul id="timer-laps"></ul>
         </div>
     </div>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="script.js"></script>
+    <footer style="text-align:center; margin-top: 32px; color: #888; font-size: 0.95em;">
+        &copy; 2025 Shlok Dalvi
+    </footer>
 </body>
 </html>

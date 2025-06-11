@@ -308,3 +308,72 @@ body {
         border-radius: 14px;
     }
 }
+
+/* Add after the existing header styles */
+
+#user-info {
+    position: absolute;
+    right: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#user-email {
+    color: #90caf9;
+    font-size: 1rem;
+    margin-right: 4px;
+}
+
+.auth-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: #b71c1c;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.auth-btn:hover {
+    background: #d32f2f;
+}
+
+/* Home button styles */
+#home-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    margin-right: 16px;
+    border: none;
+    background: #1976d2;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    cursor: pointer;
+    transition: background 0.2s;
+    padding: 0;
+}
+#home-btn:hover {
+    background: #1565c0;
+}
+#home-btn svg {
+    display: block;
+}
+
+/* Header layout for alignment */
+header {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    position: relative;
+    margin-bottom: 32px; /* Add space below header/title */
+}
+header h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 600;
+}
