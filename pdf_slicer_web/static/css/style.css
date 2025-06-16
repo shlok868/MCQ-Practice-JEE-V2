@@ -1,0 +1,124 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+    color: #333;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    width: 95%;
+    max-width: 1400px;
+}
+
+h1 {
+    text-align: center;
+    color: #007bff;
+}
+
+.controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.control-group label {
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+input[type="file"], input[type="text"], button {
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+input[type="checkbox"] {
+    margin-right: auto; /* Align with label better */
+    width: auto;
+}
+
+
+button {
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+#pdf_path_label {
+    font-style: italic;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    max-width: 200px; /* Adjust as needed */
+    vertical-align: middle;
+}
+
+.image-display-container {
+    position: relative; /* For coord_display positioning */
+    width: 100%;
+    height: 600px; /* Adjust as needed, or make dynamic */
+    border: 1px solid #ccc;
+    overflow: auto; /* Fallback scrollbars if canvas overflows */
+    background-color: #2B2B2B; /* Match desktop canvas bg */
+}
+
+#image_canvas {
+    display: block; /* Removes extra space below canvas */
+    cursor: crosshair;
+}
+
+#coord_display {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background-color: rgba(0,0,0,0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.status {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 4px;
+    text-align: center;
+}
+.status.success { background-color: #d4edda; color: #155724; }
+.status.error { background-color: #f8d7da; color: #721c24; }
+.status.info { background-color: #d1ecf1; color: #0c5460; }
+
+.instructions {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+}

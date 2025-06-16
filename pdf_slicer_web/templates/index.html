@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Intelligent Auto-Slicer (Web)</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>PDF Intelligent Auto-Slicer</h1>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="pdf_file">1. Select PDF:</label>
+                <input type="file" id="pdf_file" accept=".pdf">
+                <span id="pdf_path_label">No PDF selected</span>
+            </div>
+
+            <div class="control-group">
+                <label for="page_range">Page Range (e.g., 1-5, 7):</label>
+                <input type="text" id="page_range" placeholder="All pages if blank">
+            </div>
+            
+            <button id="process_button">2. Process PDF</button>
+
+            <div class="control-group">
+                <label for="math_mode">Math Mode:</label>
+                <input type="checkbox" id="math_mode">
+            </div>
+
+            <button id="auto_split_button" disabled>3. Auto-Split</button>
+            
+            <div class="control-group">
+                <label for="folder_name">Output ZIP Name:</label>
+                <input type="text" id="folder_name" value="pdf_slices">
+            </div>
+
+            <button id="split_save_button" disabled>4. Save Splits</button>
+            <button id="reset_button">Reset All</button>
+            <button id="reset_lines_button" disabled>Reset Lines</button>
+        </div>
+
+        <div id="status_message" class="status"></div>
+
+        <div class="image-display-container">
+            <canvas id="image_canvas"></canvas>
+            <div id="coord_display">X: --- Y: ---</div>
+        </div>
+        <p class="instructions">
+            Instructions: <br>
+            - Upload PDF, specify page range (optional), click Process. <br>
+            - Image appears below. Ctrl+Scroll to Zoom. Click+Drag canvas to Pan (when zoomed). <br>
+            - Click on image to add a split line. Drag lines to adjust. Select line (hover, turns blue) and press 'Delete' key to remove. <br>
+            - Use Auto-Split for automatic detection. Adjust as needed. <br>
+            - Enter desired ZIP file name, then click Save Splits.
+        </p>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
