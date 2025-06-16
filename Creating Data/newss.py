@@ -88,24 +88,41 @@ class PDFSlicerApp:
         self.reset_button.grid(row=1, column=5, padx=10, pady=5)
         self.math_mode_switch = ctk.CTkSwitch(self.top_frame, text="Math Mode", command=self._toggle_math_mode, onvalue=True, offvalue=False)
         self.math_mode_switch.grid(row=1, column=6, padx=20, pady=5)
+        # Row 2
+        self.folder_name_label = ctk.CTkLabel(self.top_frame, text="Save Folder:")
+        self.folder_name_label.grid(row=2, column=0, padx=10, pady=5)
+        self.folder_name_entry = ctk.CTkEntry(self.top_frame, placeholder_text="split_output")
+        self.folder_name_entry.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
+        # Save location selection
+        self.save_location_label = ctk.CTkLabel(self.top_frame, text="Save Location:")
+        self.save_location_label.grid(row=2, column=2, padx=10, pady=5)
+        self.save_location_entry = ctk.CTkEntry(self.top_frame, width=350)
+        self.save_location_entry.grid(row=2, column=3, padx=10, pady=5, sticky="ew")
+        self.save_location_entry.insert(0, r"C:\Users\IQ_mo\OneDrive\Documents\GitHub\MCQ-Practice-JEE - Copy\public\data")
+        self.browse_save_btn = ctk.CTkButton(self.top_frame, text="Browse", command=self.browse_save_location)
+        self.browse_save_btn.grid(row=2, column=4, padx=10, pady=5)
+        # --- PART 2: Image Paste/Select and Process ---
+        self.part2_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        self.part2_frame.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
+        self.part2_frame.grid_columnconfigure(1, weight=1)
+        self.paste_label = ctk.CTkLabel(self.part2_frame, text="Paste or select image for Q/A extraction:")
+        self.paste_label.grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        self.paste_btn = ctk.CTkButton(self.part2_frame, text="Paste from Clipboard", command=self.paste_image_from_clipboard)
+        self.paste_btn.grid(row=0, column=1, padx=10, pady=5)
+        self.select_img_btn = ctk.CTkButton(self.part2_frame, text="Select Image File", command=self.select_image_file)
+        self.select_img_btn.grid(row=0, column=2, padx=10, pady=5)
+        self.img_preview_label = ctk.CTkLabel(self.part2_frame, text="No image loaded", anchor="w")
+        self.img_preview_label.grid(row=1, column=0, columnspan=3, padx=10, pady=5, sticky="ew")
+        self.process_img_btn = ctk.CTkButton(self.part2_frame, text="Process Image", command=self.process_image_with_gemini)
+        self.process_img_btn.grid(row=2, column=0, columnspan=3, padx=10, pady=5)
+        self.pasted_image = None
+        self.pasted_image_path = None
 
-    def _create_image_canvas(self):
-        self.canvas = Canvas(self.image_display_frame, bg="#2B2B2B", highlightthickness=0)
-        self.canvas.grid(row=0, column=0, sticky='nsew')
-        self.v_scrollbar = ctk.CTkScrollbar(self.image_display_frame, command=self.canvas.yview)
-        self.v_scrollbar.grid(row=0, column=1, sticky='ns')
-        self.h_scrollbar = ctk.CTkScrollbar(self.image_display_frame, orientation="horizontal", command=self.canvas.xview)
-        self.h_scrollbar.grid(row=1, column=0, sticky='ew')
-        self.canvas.configure(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
-        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self.canvas.bind("<Button-4>", self._on_mousewheel)
-        self.canvas.bind("<Button-5>", self._on_mousewheel)
-        self.canvas.bind("<Motion>", self._on_mouse_move)
-        self.canvas.bind("<ButtonPress-1>", self._on_mouse_press)
-        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
-        self.canvas.bind("<ButtonRelease-1>", self._on_drag_release)
-        self.canvas.bind("<Delete>", self._on_delete_key)
-        self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+    def browse_save_location(self):
+        path = filedialog.askdirectory(title="Select Save Location")
+        if path:
+            self.save_location_entry.delete(0, 'end')
+            self.save_location_entry.insert(0, path)
 
     def _toggle_math_mode(self):
         self.math_mode_enabled = self.math_mode_switch.get()
@@ -193,7 +210,9 @@ class PDFSlicerApp:
         if not self.long_image_pil or not self.split_lines_real:
             messagebox.showwarning("Nothing to Split", "Please use 'Auto-Split' or click to create splits first.")
             return
-        output_folder = "split_output"
+        folder_name = self.folder_name_entry.get().strip() or "split_output"
+        base_save_path = self.save_location_entry.get().strip() or r"C:\Users\IQ_mo\OneDrive\Documents\GitHub\MCQ-Practice-JEE - Copy\public\data"
+        output_folder = os.path.join(base_save_path, folder_name)
         os.makedirs(output_folder, exist_ok=True)
         split_points = sorted(self.split_lines_real)
         boundaries = split_points + [self.long_image_pil.height]
@@ -443,6 +462,103 @@ class PDFSlicerApp:
         except ValueError:
             messagebox.showerror("Invalid Range", f"Could not parse page range: '{range_str}'.")
             return None
+
+    def paste_image_from_clipboard(self):
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grabclipboard()
+            if isinstance(img, Image.Image):
+                self.pasted_image = img
+                self.pasted_image_path = None
+                self.img_preview_label.configure(text="Image loaded from clipboard.")
+            else:
+                self.img_preview_label.configure(text="No image in clipboard.")
+        except Exception as e:
+            self.img_preview_label.configure(text=f"Clipboard error: {e}")
+
+    def select_image_file(self):
+        path = filedialog.askopenfilename(title="Select an image file", filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.bmp")])
+        if path:
+            try:
+                img = Image.open(path)
+                self.pasted_image = img
+                self.pasted_image_path = path
+                self.img_preview_label.configure(text=f"Loaded: {os.path.basename(path)}")
+            except Exception as e:
+                self.img_preview_label.configure(text=f"File error: {e}")
+
+    def process_image_with_gemini(self):
+        import base64
+        import requests
+        import json
+        if self.pasted_image is None:
+            messagebox.showwarning("No Image", "Paste or select an image first.")
+            return
+        # Convert image to base64
+        from io import BytesIO
+        buffered = BytesIO()
+        self.pasted_image.save(buffered, format="PNG")
+        img_b64 = base64.b64encode(buffered.getvalue()).decode()
+        # Gemini 2.0 Flash API endpoint
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyAK67tGvTAb9Gsr0Qwb6hZKuGtNQ7Rc-LA"
+        prompt = ("Extract questions and answers in json format. If applicable, replace a,b,c,d with 1,2,3,4. The format should be: \"1\":1, \"2\":3, and so on. In case of multiple answers, consider only the first one. "
+                  "recheck the answers to make it very accurate")
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "contents": [
+                {"parts": [
+                    {"text": prompt},
+                    {"inlineData": {"mimeType": "image/png", "data": img_b64}}
+                ]}
+            ]
+        }
+        self.img_preview_label.configure(text="Processing image with Gemini 2.0 Flash...")
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=60)
+            if response.status_code == 200:
+                result = response.json()
+                # Try to extract the JSON from the model's text response
+                text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                # Try to parse JSON from the text
+                try:
+                    # If the model returns a code block, strip it
+                    import re
+                    json_str = re.sub(r'```json|```', '', text).strip()
+                    qa_json = json.loads(json_str)
+                except Exception:
+                    qa_json = text  # fallback: save raw text
+                # Save to ans.json in the chosen folder
+                folder_name = self.folder_name_entry.get().strip() or "split_output"
+                base_save_path = self.save_location_entry.get().strip() or r"C:\Users\IQ_mo\OneDrive\Documents\GitHub\MCQ-Practice-JEE - Copy\public\data"
+                output_folder = os.path.join(base_save_path, folder_name)
+                os.makedirs(output_folder, exist_ok=True)
+                ans_path = os.path.join(output_folder, "ans.json")
+                with open(ans_path, "w", encoding="utf-8") as f:
+                    json.dump(qa_json, f, ensure_ascii=False, indent=2)
+                self.img_preview_label.configure(text=f"Saved extracted Q/A to {ans_path}")
+            else:
+                self.img_preview_label.configure(text=f"Gemini API error: {response.status_code}")
+        except Exception as e:
+            self.img_preview_label.configure(text=f"Error: {e}")
+
+
+    def _create_image_canvas(self):
+        self.canvas = Canvas(self.image_display_frame, bg="#2B2B2B", highlightthickness=0)
+        self.canvas.grid(row=0, column=0, sticky='nsew')
+        self.v_scrollbar = ctk.CTkScrollbar(self.image_display_frame, command=self.canvas.yview)
+        self.v_scrollbar.grid(row=0, column=1, sticky='ns')
+        self.h_scrollbar = ctk.CTkScrollbar(self.image_display_frame, orientation="horizontal", command=self.canvas.xview)
+        self.h_scrollbar.grid(row=1, column=0, sticky='ew')
+        self.canvas.configure(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<Button-4>", self._on_mousewheel)
+        self.canvas.bind("<Button-5>", self._on_mousewheel)
+        self.canvas.bind("<Motion>", self._on_mouse_move)
+        self.canvas.bind("<ButtonPress-1>", self._on_mouse_press)
+        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self.canvas.bind("<ButtonRelease-1>", self._on_drag_release)
+        self.canvas.bind("<Delete>", self._on_delete_key)
+        self.canvas.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
 
 # --- Main Application Execution ---
 if __name__ == "__main__":
