@@ -13,9 +13,8 @@ ctk.set_default_color_theme("blue")
 class PDFSlicerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PDF Intelligent Auto-Slicer v5.2 (Fixed)")
+        self.root.title("PDF Intelligent Auto-Slicer v5.3 (Responsive Zoom)") # Updated version
         self.root.geometry("1200x800")
-
         # --- State Variables ---
         self.pdf_path = None
         self.long_image_pil = None
@@ -25,23 +24,17 @@ class PDFSlicerApp:
         self.display_scale_factor = 1.0
         self.resize_job = None
         self.os_platform = platform.system()
-        
         # Smooth Zooming
         self.zoom_level = 1.0
-        self.target_zoom_level = 1.0
-        self.is_zooming = False
-        self.zoom_animation_event = None
         self.min_zoom = 0.1
         self.max_zoom = 8.0
-        
+        self.zoom_job = None  # Debounced zoom event
         # Drag and Drop & Delete
         self.hovered_line_index = None
         self.dragging_line_index = None
         self.DRAG_SENSITIVITY = 7
-
         # Math Mode
         self.math_mode_enabled = False
-
         # Autonomous Splitting Parameters
         self.LEFT_SCAN_X_START = 500
         self.LEFT_SCAN_X_END = 600
@@ -59,7 +52,6 @@ class PDFSlicerApp:
             {'name': 'pink', 'r_max': 255, 'g_min': 50, 'b_min': 150, 'g_max': 150, 'r_min': 180},
             {'name': 'green', 'r_max': 80, 'g_min': 120, 'b_min': 50, 'b_max': 120}
         ]
-
         # --- UI Structure ---
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(1, weight=1)
@@ -70,7 +62,6 @@ class PDFSlicerApp:
         self.image_display_frame.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
         self.image_display_frame.grid_rowconfigure(0, weight=1)
         self.image_display_frame.grid_columnconfigure(0, weight=1)
-        
         self._create_control_widgets()
         self._create_image_canvas()
         self._create_coord_display()
@@ -82,7 +73,6 @@ class PDFSlicerApp:
         self.select_pdf_button.grid(row=0, column=0, padx=10, pady=5)
         self.pdf_path_label = ctk.CTkLabel(self.top_frame, text="No PDF selected", text_color="gray", anchor="w")
         self.pdf_path_label.grid(row=0, column=1, columnspan=5, padx=10, pady=5, sticky="ew")
-        
         # Row 1
         self.page_range_label = ctk.CTkLabel(self.top_frame, text="Page Range:")
         self.page_range_label.grid(row=1, column=0, padx=10, pady=5)
@@ -139,11 +129,7 @@ class PDFSlicerApp:
         if not self.long_image_pil or not self.image_boundaries:
             messagebox.showwarning("No Image", "Please process a PDF first.")
             return
-        
-        # === THE FIX IS HERE ===
         self.reset_clicks()  # Correctly reset only the lines, not the whole state.
-        # =======================
-
         print("Starting intelligent auto-split process...")
         try:
             pixels = self.long_image_pil.load()
@@ -163,7 +149,8 @@ class PDFSlicerApp:
                 while y < boundary['end']:
                     found_in_scan_strip = False
                     for x in range(scan_x_start, scan_x_end):
-                        if y >= height: break
+                        if y >= height:
+                            break
                         r, g, b = pixels[x, y]
                         if r < self.BLACK_THRESHOLD and g < self.BLACK_THRESHOLD and b < self.BLACK_THRESHOLD:
                             if boundary['type'] == 'left':
@@ -175,24 +162,27 @@ class PDFSlicerApp:
                                     break
                                 else:
                                     split_point = y - split_offset
-                                    if split_point > 0: self.split_lines_real.append(split_point)
+                                    if split_point > 0:
+                                        self.split_lines_real.append(split_point)
                                     print(f"  -> Black pixel at ({x}, {y}), no heading line. Placing split at y={split_point}.")
                                     y += self.MIN_JUMP_DISTANCE
                                     found_in_scan_strip = True
                                     break
-                            else: # Right page logic
+                            else:  # Right page logic
                                 if is_first_right_image and not found_split_in_first_right_image:
                                     print(f"  -> Black pixel at ({x},{y}) on first right image. IGNORING this one.")
                                     found_split_in_first_right_image = True
                                 else:
                                     split_point = y - split_offset
-                                    if split_point > 0: self.split_lines_real.append(split_point)
+                                    if split_point > 0:
+                                        self.split_lines_real.append(split_point)
                                     print(f"  -> Black pixel at ({x}, {y}). Placing split at y={split_point}.")
                                 y += self.MIN_JUMP_DISTANCE
                                 found_in_scan_strip = True
                                 break
-                    if not found_in_scan_strip: y += 1
-            self.split_lines_real.sort() # Ensure sorted after processing all parts
+                    if not found_in_scan_strip:
+                        y += 1
+            self.split_lines_real.sort()  # Ensure sorted after processing all parts
             print(f"\nAuto-split finished. Found {len(self.split_lines_real)} total questions.")
             self.redraw_split_lines()
             messagebox.showinfo("Auto-Split Complete", f"Found and marked {len(self.split_lines_real)} questions.")
@@ -208,14 +198,15 @@ class PDFSlicerApp:
         split_points = sorted(self.split_lines_real)
         boundaries = split_points + [self.long_image_pil.height]
         if len(boundaries) < 2:
-             messagebox.showwarning("Not Enough Splits", "Need at least one split line to save a question.")
-             return
+            messagebox.showwarning("Not Enough Splits", "Need at least one split line to save a question.")
+            return
         try:
             num_saved = 0
             for i in range(len(boundaries) - 1):
                 y_start = boundaries[i]
                 y_end = boundaries[i+1]
-                if y_end <= y_start: continue
+                if y_end <= y_start:
+                    continue
                 crop_box = (0, y_start, self.long_image_pil.width, y_end)
                 split_image = self.long_image_pil.crop(crop_box)
                 output_path = os.path.join(output_folder, f"q{i+1}.png")
@@ -226,30 +217,19 @@ class PDFSlicerApp:
         except Exception as e:
             messagebox.showerror("Save Error", f"An error occurred while saving: {e}")
 
-    def _animate_zoom(self):
-        self.is_zooming = True
-        diff = self.target_zoom_level - self.zoom_level
-        if abs(diff) < 0.001:
-            self.zoom_level = self.target_zoom_level
-            self.is_zooming = False
-            self.update_image_display(zoom_event=self.zoom_animation_event)
-            return
-        self.zoom_level += diff * 0.2
-        self.update_image_display(zoom_event=self.zoom_animation_event)
-        self.root.after(15, self._animate_zoom)
-
     def _on_mousewheel(self, event):
         is_ctrl_pressed = (event.state & 4) != 0
         if is_ctrl_pressed:
-            zoom_factor = 1.1
+            zoom_factor = 1.2  # A slightly larger step feels better without animation
             if event.delta > 0 or event.num == 4:
-                self.target_zoom_level *= zoom_factor
+                self.zoom_level *= zoom_factor
             elif event.delta < 0 or event.num == 5:
-                self.target_zoom_level /= zoom_factor
-            self.target_zoom_level = max(self.min_zoom, min(self.max_zoom, self.target_zoom_level))
-            self.zoom_animation_event = event
-            if not self.is_zooming:
-                self._animate_zoom()
+                self.zoom_level /= zoom_factor
+            self.zoom_level = max(self.min_zoom, min(self.max_zoom, self.zoom_level))
+            # Debouncing: cancel any pending zoom and schedule a new one
+            if self.zoom_job:
+                self.root.after_cancel(self.zoom_job)
+            self.zoom_job = self.root.after(75, lambda e=event: self._perform_zoom(e))
         else:
             if self.os_platform == "Linux":
                 if event.num == 4: self.canvas.yview_scroll(-1, "units")
@@ -257,6 +237,13 @@ class PDFSlicerApp:
             else:
                 scroll_val = -1 * (event.delta // 120) if self.os_platform == "Windows" else -1 * event.delta
                 self.canvas.yview_scroll(scroll_val, "units")
+
+    def _perform_zoom(self, event):
+        """
+        Actually performs the zoom. This is called by the debouncer in _on_mousewheel.
+        """
+        self.zoom_job = None
+        self.update_image_display(zoom_event=event)
 
     def process_pdf(self):
         if not self.pdf_path:
@@ -316,11 +303,9 @@ class PDFSlicerApp:
         self.reset_button.configure(state="disabled")
         self.display_scale_factor = 1.0
         self.zoom_level = 1.0
-        self.target_zoom_level = 1.0
-        self.is_zooming = False
         self.image_boundaries.clear()
         print("All states have been reset.")
-        
+
     def reset_clicks(self):
         self.split_lines_real.clear()
         self.canvas.delete("split_line")
@@ -425,7 +410,6 @@ class PDFSlicerApp:
         if self.resize_job: self.root.after_cancel(self.resize_job)
         def _resize_action():
             self.zoom_level = 1.0
-            self.target_zoom_level = 1.0
             self.update_image_display()
         self.resize_job = self.root.after(250, _resize_action)
 

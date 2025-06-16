@@ -16,14 +16,22 @@ const db = firebase.firestore();
 // Auth state observer
 auth.onAuthStateChanged((user) => {
     if (user) {
-        // User is signed in
         document.getElementById('auth-buttons').style.display = 'none';
         document.getElementById('user-info').style.display = 'flex';
         document.getElementById('user-email').textContent = user.email;
+        // Show folder adder only for admin
+        const folderAdderBtn = document.getElementById('folder-adder-btn');
+        if (user.email === "shlok@admin.com") {
+            folderAdderBtn.style.display = 'inline-block';
+        } else {
+            folderAdderBtn.style.display = 'none';
+        }
     } else {
-        // User is signed out
         document.getElementById('auth-buttons').style.display = 'block';
         document.getElementById('user-info').style.display = 'none';
+        // Hide folder adder if not logged in
+        const folderAdderBtn = document.getElementById('folder-adder-btn');
+        if (folderAdderBtn) folderAdderBtn.style.display = 'none';
     }
 });
 
