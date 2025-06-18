@@ -117,6 +117,41 @@ class PDFSlicerApp:
         self.process_img_btn.grid(row=2, column=0, columnspan=3, padx=10, pady=5)
         self.pasted_image = None
         self.pasted_image_path = None
+        # --- Splitting Parameters UI ---
+        self.split_params_frame = ctk.CTkFrame(self.top_frame, corner_radius=10)
+        self.split_params_frame.grid(row=3, column=0, columnspan=7, padx=10, pady=10, sticky="ew")
+        self.split_params_frame.grid_columnconfigure((1, 3, 5, 7, 9, 11, 13), weight=1)
+        # Parameter: name, default, row, col
+        self.param_entries = {}
+        params = [
+            ("LEFT_SCAN_X_START", self.LEFT_SCAN_X_START, 0, 0),
+            ("LEFT_SCAN_X_END", self.LEFT_SCAN_X_END, 0, 2),
+            ("RIGHT_SCAN_X_START", self.RIGHT_SCAN_X_START, 0, 4),
+            ("RIGHT_SCAN_X_END", self.RIGHT_SCAN_X_END, 0, 6),
+            ("BLACK_THRESHOLD", self.BLACK_THRESHOLD, 0, 8),
+            ("DEFAULT_SPLIT_OFFSET", self.DEFAULT_SPLIT_OFFSET, 0, 10),
+            ("MATH_SPLIT_OFFSET", self.MATH_SPLIT_OFFSET, 0, 12),
+            ("MIN_JUMP_DISTANCE", self.MIN_JUMP_DISTANCE, 1, 0),
+            ("HEADING_SCAN_LOOKAHEAD", self.HEADING_SCAN_LOOKAHEAD, 1, 2),
+            ("HEADING_SCAN_X_START", self.HEADING_SCAN_X_START, 1, 4),
+            ("HEADING_SCAN_X_END", self.HEADING_SCAN_X_END, 1, 6)
+        ]
+        for name, default, row, col in params:
+            label = ctk.CTkLabel(self.split_params_frame, text=name+":")
+            label.grid(row=row, column=col, padx=2, pady=2, sticky="e")
+            entry = ctk.CTkEntry(self.split_params_frame, width=60)
+            entry.insert(0, str(default))
+            entry.grid(row=row, column=col+1, padx=2, pady=2, sticky="w")
+            self.param_entries[name] = entry
+
+    def _update_split_params_from_ui(self):
+        # Update class attributes from UI entries
+        for name, entry in self.param_entries.items():
+            try:
+                value = int(entry.get())
+                setattr(self, name, value)
+            except Exception:
+                pass  # Ignore invalid input, keep previous/default
 
     def browse_save_location(self):
         path = filedialog.askdirectory(title="Select Save Location")
@@ -143,6 +178,7 @@ class PDFSlicerApp:
         return None, None
 
     def auto_split_image(self):
+        self._update_split_params_from_ui()  # <-- Add this line to update params from UI
         if not self.long_image_pil or not self.image_boundaries:
             messagebox.showwarning("No Image", "Please process a PDF first.")
             return
