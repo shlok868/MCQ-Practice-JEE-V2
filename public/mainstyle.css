@@ -9,7 +9,7 @@ body {
 }
 
 .main-wrapper {
-    min-height: 100vh;
+    min-height: 100%;
     width: 100vw;
     background: #151c24;
 }

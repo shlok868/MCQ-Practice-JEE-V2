@@ -82,8 +82,6 @@ class PDFSlicerApp:
         self.process_button.grid(row=1, column=2, padx=10, pady=5)
         self.auto_split_button = ctk.CTkButton(self.top_frame, text="3. Auto-Split", command=self.auto_split_image)
         self.auto_split_button.grid(row=1, column=3, padx=10, pady=5)
-        self.ai_auto_split_button = ctk.CTkButton(self.top_frame, text="AI Auto-Split (Gemini)", command=self.ai_auto_split_with_gemini)
-        self.ai_auto_split_button.grid(row=1, column=7, padx=10, pady=5)
         self.split_save_button = ctk.CTkButton(self.top_frame, text="4. Save", command=self.split_and_save, state="disabled")
         self.split_save_button.grid(row=1, column=4, padx=10, pady=5)
         self.reset_button = ctk.CTkButton(self.top_frame, text="Reset", command=self.reset_all, state="disabled")
@@ -124,41 +122,6 @@ class PDFSlicerApp:
         self.process_img_btn.grid(row=2, column=0, columnspan=3, padx=10, pady=5)
         self.pasted_image = None
         self.pasted_image_path = None
-        # --- Splitting Parameters UI ---
-        self.split_params_frame = ctk.CTkFrame(self.top_frame, corner_radius=10)
-        self.split_params_frame.grid(row=3, column=0, columnspan=7, padx=10, pady=10, sticky="ew")
-        self.split_params_frame.grid_columnconfigure((1, 3, 5, 7, 9, 11, 13), weight=1)
-        # Parameter: name, default, row, col
-        self.param_entries = {}
-        params = [
-            ("LEFT_SCAN_X_START", self.LEFT_SCAN_X_START, 0, 0),
-            ("LEFT_SCAN_X_END", self.LEFT_SCAN_X_END, 0, 2),
-            ("RIGHT_SCAN_X_START", self.RIGHT_SCAN_X_START, 0, 4),
-            ("RIGHT_SCAN_X_END", self.RIGHT_SCAN_X_END, 0, 6),
-            ("BLACK_THRESHOLD", self.BLACK_THRESHOLD, 0, 8),
-            ("DEFAULT_SPLIT_OFFSET", self.DEFAULT_SPLIT_OFFSET, 0, 10),
-            ("MATH_SPLIT_OFFSET", self.MATH_SPLIT_OFFSET, 0, 12),
-            ("MIN_JUMP_DISTANCE", self.MIN_JUMP_DISTANCE, 1, 0),
-            ("HEADING_SCAN_LOOKAHEAD", self.HEADING_SCAN_LOOKAHEAD, 1, 2),
-            ("HEADING_SCAN_X_START", self.HEADING_SCAN_X_START, 1, 4),
-            ("HEADING_SCAN_X_END", self.HEADING_SCAN_X_END, 1, 6)
-        ]
-        for name, default, row, col in params:
-            label = ctk.CTkLabel(self.split_params_frame, text=name+":")
-            label.grid(row=row, column=col, padx=2, pady=2, sticky="e")
-            entry = ctk.CTkEntry(self.split_params_frame, width=60)
-            entry.insert(0, str(default))
-            entry.grid(row=row, column=col+1, padx=2, pady=2, sticky="w")
-            self.param_entries[name] = entry
-
-    def _update_split_params_from_ui(self):
-        # Update class attributes from UI entries
-        for name, entry in self.param_entries.items():
-            try:
-                value = int(entry.get())
-                setattr(self, name, value)
-            except Exception:
-                pass  # Ignore invalid input, keep previous/default
 
     def browse_save_location(self):
         path = filedialog.askdirectory(title="Select Save Location")
@@ -185,7 +148,6 @@ class PDFSlicerApp:
         return None, None
 
     def auto_split_image(self):
-        self._update_split_params_from_ui()  # <-- Add this line to update params from UI
         if not self.long_image_pil or not self.image_boundaries:
             messagebox.showwarning("No Image", "Please process a PDF first.")
             return
@@ -593,108 +555,6 @@ class PDFSlicerApp:
         except Exception as e:
             self.img_preview_label.configure(text=f"Error: {e}")
 
-    def ai_auto_split_with_gemini(self):
-        """
-        Send the processed image to Gemini with a prompt to get y-coordinates for splitting, then cut and preview the splits.
-        """
-        import base64
-        import requests
-        import json
-        from io import BytesIO
-        if self.long_image_pil is None:
-            messagebox.showwarning("No Image", "Please process a PDF first.")
-            return
-        # Convert image to base64
-        buffered = BytesIO()
-        self.long_image_pil.save(buffered, format="PNG")
-        img_b64 = base64.b64encode(buffered.getvalue()).decode()
-        # Gemini 2.0 Flash API endpoint
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyAK67tGvTAb9Gsr0Qwb6hZKuGtNQ7Rc-LA"
-        prompt = (
-            "You are given an image containing multiple questions and answers, possibly with page numbers or titles in between. "
-            "Your task: Detect the y pixel coordinates (vertical positions) where each individual question starts in the image, so that the image can be cut horizontally at those positions to separate each question. "
-            "Ignore any page numbers, titles, or unrelated text between questions and answers. "
-            "Only return a single JSON array of integers, sorted in ascending order, where each integer is the y pixel coordinate (in pixels from the top of the image) where a new question starts. "
-            "Do not include any explanation, text, or code block formatting. Only output the JSON array. "
-            "Example output: [120, 450, 900]"
-        )
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "contents": [
-                {"parts": [
-                    {"text": prompt},
-                    {"inlineData": {"mimeType": "image/png", "data": img_b64}}
-                ]}
-            ]
-        }
-        self.root.config(cursor="wait")
-        self.root.update()
-        try:
-            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=90)
-            if response.status_code == 200:
-                result = response.json()
-                text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                print("Gemini raw response:", text)  # Debug print
-                # Try to parse JSON list from the text
-                import re
-                json_str = re.sub(r'```json|```', '', text).strip()
-                try:
-                    y_coords = json.loads(json_str)
-                    if not isinstance(y_coords, list):
-                        raise ValueError("Not a list")
-                    y_coords = [int(y) for y in y_coords if isinstance(y, int) or (isinstance(y, float) and y == int(y))]
-                except Exception:
-                    messagebox.showerror("Gemini Error", f"Could not parse y-coordinates from Gemini response: {text}")
-                    self.root.config(cursor="")
-                    return
-                # Cut the image at these y-coordinates
-                boundaries = sorted(y_coords) + [self.long_image_pil.height]
-                split_images = []
-                y_start = 0
-                for y_end in boundaries:
-                    if y_end <= y_start:
-                        continue
-                    crop_box = (0, y_start, self.long_image_pil.width, y_end)
-                    split_img = self.long_image_pil.crop(crop_box)
-                    split_images.append(split_img)
-                    y_start = y_end
-                # Show preview in a popup window
-                self._show_split_preview(split_images)
-            else:
-                messagebox.showerror("Gemini API error", f"Status code: {response.status_code}")
-        except Exception as e:
-            messagebox.showerror("Gemini Error", f"Error: {e}")
-        finally:
-            self.root.config(cursor="")
-
-    def _show_split_preview(self, split_images):
-        # Show split images in a scrollable popup window
-        import tkinter as tk
-        from PIL import ImageTk
-        preview_win = tk.Toplevel(self.root)
-        preview_win.title("AI Split Preview")
-        preview_win.geometry("600x800")
-        canvas = tk.Canvas(preview_win, bg="#222222")
-        scrollbar = tk.Scrollbar(preview_win, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg="#222222")
-        scrollable_frame.bind(
-            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        self._split_thumbnails = []  # Prevent garbage collection
-        for i, img in enumerate(split_images):
-            # Resize for preview if too large
-            max_w = 550
-            scale = min(1.0, max_w / img.width)
-            disp_img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
-            img_tk = ImageTk.PhotoImage(disp_img)
-            self._split_thumbnails.append(img_tk)
-            label = tk.Label(scrollable_frame, image=img_tk, bg="#222222")
-            label.pack(padx=10, pady=10)
-            tk.Label(scrollable_frame, text=f"Split #{i+1} (height={img.height})", fg="white", bg="#222222").pack()
 
     def _create_image_canvas(self):
         self.canvas = Canvas(self.image_display_frame, bg="#2B2B2B", highlightthickness=0)

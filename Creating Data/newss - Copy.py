@@ -5,6 +5,8 @@ from PIL import Image, ImageTk
 import fitz  # PyMuPDF
 import os
 import platform
+import base64
+from io import BytesIO
 
 # --- App Configuration ---
 ctk.set_appearance_mode("System")
@@ -82,8 +84,23 @@ class PDFSlicerApp:
         self.process_button.grid(row=1, column=2, padx=10, pady=5)
         self.auto_split_button = ctk.CTkButton(self.top_frame, text="3. Auto-Split", command=self.auto_split_image)
         self.auto_split_button.grid(row=1, column=3, padx=10, pady=5)
-        self.ai_auto_split_button = ctk.CTkButton(self.top_frame, text="AI Auto-Split (Gemini)", command=self.ai_auto_split_with_gemini)
-        self.ai_auto_split_button.grid(row=1, column=7, padx=10, pady=5)
+        self.ai_split_button = ctk.CTkButton(self.top_frame, text="AI Split", command=self.ai_split_image)
+        self.ai_split_button.grid(row=1, column=7, padx=10, pady=5)
+        # Add a slider for AI split scaling (hidden by default)
+        self.ai_split_scale = ctk.CTkSlider(self.top_frame, from_=0, to=250, number_of_steps=250, command=self._on_ai_split_scale_change)
+        self.ai_split_scale.set(100)
+        self.ai_split_scale.grid(row=1, column=8, padx=10, pady=5)
+        self.ai_split_scale.grid_remove()
+        self.ai_split_multiplier = 1.0
+        self._ai_split_raw = []  # Store raw AI split values for scaling
+        self.ai_split_scale_label = ctk.CTkLabel(self.top_frame, text="x1.00")
+        self.ai_split_scale_label.grid(row=1, column=9, padx=5, pady=5)
+        self.ai_split_scale_label.grid_remove()
+        # Move all splits mode
+        self.move_all_splits_mode = False
+        self.move_all_splits_button = ctk.CTkButton(self.top_frame, text="Move All Splits", command=self._toggle_move_all_splits)
+        self.move_all_splits_button.grid(row=1, column=10, padx=10, pady=5)
+        self._move_all_splits_start_y = None
         self.split_save_button = ctk.CTkButton(self.top_frame, text="4. Save", command=self.split_and_save, state="disabled")
         self.split_save_button.grid(row=1, column=4, padx=10, pady=5)
         self.reset_button = ctk.CTkButton(self.top_frame, text="Reset", command=self.reset_all, state="disabled")
@@ -124,41 +141,6 @@ class PDFSlicerApp:
         self.process_img_btn.grid(row=2, column=0, columnspan=3, padx=10, pady=5)
         self.pasted_image = None
         self.pasted_image_path = None
-        # --- Splitting Parameters UI ---
-        self.split_params_frame = ctk.CTkFrame(self.top_frame, corner_radius=10)
-        self.split_params_frame.grid(row=3, column=0, columnspan=7, padx=10, pady=10, sticky="ew")
-        self.split_params_frame.grid_columnconfigure((1, 3, 5, 7, 9, 11, 13), weight=1)
-        # Parameter: name, default, row, col
-        self.param_entries = {}
-        params = [
-            ("LEFT_SCAN_X_START", self.LEFT_SCAN_X_START, 0, 0),
-            ("LEFT_SCAN_X_END", self.LEFT_SCAN_X_END, 0, 2),
-            ("RIGHT_SCAN_X_START", self.RIGHT_SCAN_X_START, 0, 4),
-            ("RIGHT_SCAN_X_END", self.RIGHT_SCAN_X_END, 0, 6),
-            ("BLACK_THRESHOLD", self.BLACK_THRESHOLD, 0, 8),
-            ("DEFAULT_SPLIT_OFFSET", self.DEFAULT_SPLIT_OFFSET, 0, 10),
-            ("MATH_SPLIT_OFFSET", self.MATH_SPLIT_OFFSET, 0, 12),
-            ("MIN_JUMP_DISTANCE", self.MIN_JUMP_DISTANCE, 1, 0),
-            ("HEADING_SCAN_LOOKAHEAD", self.HEADING_SCAN_LOOKAHEAD, 1, 2),
-            ("HEADING_SCAN_X_START", self.HEADING_SCAN_X_START, 1, 4),
-            ("HEADING_SCAN_X_END", self.HEADING_SCAN_X_END, 1, 6)
-        ]
-        for name, default, row, col in params:
-            label = ctk.CTkLabel(self.split_params_frame, text=name+":")
-            label.grid(row=row, column=col, padx=2, pady=2, sticky="e")
-            entry = ctk.CTkEntry(self.split_params_frame, width=60)
-            entry.insert(0, str(default))
-            entry.grid(row=row, column=col+1, padx=2, pady=2, sticky="w")
-            self.param_entries[name] = entry
-
-    def _update_split_params_from_ui(self):
-        # Update class attributes from UI entries
-        for name, entry in self.param_entries.items():
-            try:
-                value = int(entry.get())
-                setattr(self, name, value)
-            except Exception:
-                pass  # Ignore invalid input, keep previous/default
 
     def browse_save_location(self):
         path = filedialog.askdirectory(title="Select Save Location")
@@ -185,7 +167,6 @@ class PDFSlicerApp:
         return None, None
 
     def auto_split_image(self):
-        self._update_split_params_from_ui()  # <-- Add this line to update params from UI
         if not self.long_image_pil or not self.image_boundaries:
             messagebox.showwarning("No Image", "Please process a PDF first.")
             return
@@ -416,12 +397,16 @@ class PDFSlicerApp:
 
     def _on_mouse_press(self, event):
         self.canvas.focus_set()
-        if self.hovered_line_index is not None:
+        y_on_canvas = self.canvas.canvasy(event.y)
+        real_y = y_on_canvas * self.display_scale_factor
+        if self.move_all_splits_mode and self.split_lines_real:
+            self._move_all_splits_start_y = real_y
+            self.dragging_line_index = 0  # Use 0 as a flag for group drag
+            print("Started moving all split lines together")
+        elif self.hovered_line_index is not None:
             self.dragging_line_index = self.hovered_line_index
             print(f"Started dragging line #{self.dragging_line_index}")
         else:
-            y_on_canvas = self.canvas.canvasy(event.y)
-            real_y = y_on_canvas * self.display_scale_factor
             self.split_lines_real.append(real_y)
             self.split_lines_real.sort()
             self.redraw_split_lines()
@@ -431,12 +416,22 @@ class PDFSlicerApp:
         if self.dragging_line_index is None: return
         y_on_canvas = self.canvas.canvasy(event.y)
         new_real_y = y_on_canvas * self.display_scale_factor
-        self.split_lines_real[self.dragging_line_index] = new_real_y
-        self.redraw_split_lines()
+        if self.move_all_splits_mode and self._move_all_splits_start_y is not None:
+            delta = new_real_y - self._move_all_splits_start_y
+            self.split_lines_real = [y + delta for y in self.split_lines_real]
+            self._move_all_splits_start_y = new_real_y
+            self.redraw_split_lines()
+        elif self.dragging_line_index is not None and self.dragging_line_index < len(self.split_lines_real):
+            self.split_lines_real[self.dragging_line_index] = new_real_y
+            self.redraw_split_lines()
 
     def _on_drag_release(self, event):
         if self.dragging_line_index is not None:
-            print(f"Finished dragging line #{self.dragging_line_index}.")
+            if self.move_all_splits_mode:
+                print("Finished moving all split lines together.")
+                self._move_all_splits_start_y = None
+            else:
+                print(f"Finished dragging line #{self.dragging_line_index}.")
             self.dragging_line_index = None
             self.split_lines_real.sort()
             self._on_mouse_move(event)
@@ -540,14 +535,12 @@ class PDFSlicerApp:
                 self.img_preview_label.configure(text=f"File error: {e}")
 
     def process_image_with_gemini(self):
-        import base64
         import requests
         import json
         if self.pasted_image is None:
             messagebox.showwarning("No Image", "Paste or select an image first.")
             return
         # Convert image to base64
-        from io import BytesIO
         buffered = BytesIO()
         self.pasted_image.save(buffered, format="PNG")
         img_b64 = base64.b64encode(buffered.getvalue()).decode()
@@ -593,30 +586,36 @@ class PDFSlicerApp:
         except Exception as e:
             self.img_preview_label.configure(text=f"Error: {e}")
 
-    def ai_auto_split_with_gemini(self):
-        """
-        Send the processed image to Gemini with a prompt to get y-coordinates for splitting, then cut and preview the splits.
-        """
-        import base64
+    def ai_split_image(self):
         import requests
         import json
         from io import BytesIO
-        if self.long_image_pil is None:
-            messagebox.showwarning("No Image", "Please process a PDF first.")
+        import re
+        # Find the first left image from image_boundaries
+        left_boundary = None
+        for b in self.image_boundaries:
+            if b.get('type') == 'left':
+                left_boundary = b
+                break
+        if left_boundary is None:
+            messagebox.showwarning("No Left Image", "No left image found to send to AI.")
             return
-        # Convert image to base64
+        if self.long_image_pil is None:
+            messagebox.showwarning("No Image", "No image loaded.")
+            return
+        # Crop the first left image
+        img = self.long_image_pil.crop((0, left_boundary['start'], self.long_image_pil.width, left_boundary['end']))
         buffered = BytesIO()
-        self.long_image_pil.save(buffered, format="PNG")
+        img.save(buffered, format="PNG")
         img_b64 = base64.b64encode(buffered.getvalue()).decode()
-        # Gemini 2.0 Flash API endpoint
+        # Gemini API endpoint and prompt
         url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyAK67tGvTAb9Gsr0Qwb6hZKuGtNQ7Rc-LA"
         prompt = (
-            "You are given an image containing multiple questions and answers, possibly with page numbers or titles in between. "
-            "Your task: Detect the y pixel coordinates (vertical positions) where each individual question starts in the image, so that the image can be cut horizontally at those positions to separate each question. "
-            "Ignore any page numbers, titles, or unrelated text between questions and answers. "
-            "Only return a single JSON array of integers, sorted in ascending order, where each integer is the y pixel coordinate (in pixels from the top of the image) where a new question starts. "
-            "Do not include any explanation, text, or code block formatting. Only output the JSON array. "
-            "Example output: [120, 450, 900]"
+            "You are given a scanned page of a question paper. "
+            "Each question starts with a number followed by a dot and a space (e.g., '1. ', '2. ', etc.), usually at the beginning of a new line. "
+            "Your task is to detect the y-axis pixel positions (from the top of the image) where each new question starts, by identifying these patterns. "
+            "Return a JSON array of integers, each being the y-coordinate (in pixels) of the start of a question, sorted in increasing order. "
+            "Do not include any other text, just the JSON array. Example: [120, 450, 900]"
         )
         headers = {"Content-Type": "application/json"}
         data = {
@@ -627,74 +626,58 @@ class PDFSlicerApp:
                 ]}
             ]
         }
-        self.root.config(cursor="wait")
-        self.root.update()
+        self.img_preview_label.configure(text="Processing left image with Gemini for split points...")
         try:
-            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=90)
+            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=60)
             if response.status_code == 200:
                 result = response.json()
                 text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                print("Gemini raw response:", text)  # Debug print
-                # Try to parse JSON list from the text
-                import re
-                json_str = re.sub(r'```json|```', '', text).strip()
+                # Extract JSON array from text
                 try:
-                    y_coords = json.loads(json_str)
-                    if not isinstance(y_coords, list):
-                        raise ValueError("Not a list")
-                    y_coords = [int(y) for y in y_coords if isinstance(y, int) or (isinstance(y, float) and y == int(y))]
-                except Exception:
-                    messagebox.showerror("Gemini Error", f"Could not parse y-coordinates from Gemini response: {text}")
-                    self.root.config(cursor="")
-                    return
-                # Cut the image at these y-coordinates
-                boundaries = sorted(y_coords) + [self.long_image_pil.height]
-                split_images = []
-                y_start = 0
-                for y_end in boundaries:
-                    if y_end <= y_start:
-                        continue
-                    crop_box = (0, y_start, self.long_image_pil.width, y_end)
-                    split_img = self.long_image_pil.crop(crop_box)
-                    split_images.append(split_img)
-                    y_start = y_end
-                # Show preview in a popup window
-                self._show_split_preview(split_images)
+                    json_str = re.search(r'\[.*?\]', text, re.DOTALL).group(0)
+                    split_points = json.loads(json_str)
+                    if not isinstance(split_points, list):
+                        raise ValueError("AI did not return a list.")
+                    # Store raw AI split values for scaling
+                    self._ai_split_raw = split_points
+                    self.ai_split_scale.set(100)
+                    self.ai_split_multiplier = 1.0
+                    self.ai_split_scale.grid()  # Show the slider
+                    self.ai_split_scale_label.configure(text=f"x{self.ai_split_multiplier:.2f}")
+                    self.ai_split_scale_label.grid()
+                    self._apply_ai_split_scaling(left_boundary['start'])
+                    messagebox.showinfo("AI Split Complete", f"AI found {len(self._ai_split_raw)} split points. Adjust the slider if needed.")
+                except Exception as e:
+                    self.ai_split_scale.grid_remove()
+                    self.ai_split_scale_label.grid_remove()
+                    messagebox.showerror("AI Split Error", f"Could not parse AI response: {text}\nError: {e}")
             else:
-                messagebox.showerror("Gemini API error", f"Status code: {response.status_code}")
+                self.ai_split_scale.grid_remove()
+                self.ai_split_scale_label.grid_remove()
+                messagebox.showerror("Gemini API Error", f"Status code: {response.status_code}")
         except Exception as e:
-            messagebox.showerror("Gemini Error", f"Error: {e}")
-        finally:
-            self.root.config(cursor="")
+            self.ai_split_scale.grid_remove()
+            self.ai_split_scale_label.grid_remove()
+            messagebox.showerror("AI Split Error", f"An error occurred: {e}")
 
-    def _show_split_preview(self, split_images):
-        # Show split images in a scrollable popup window
-        import tkinter as tk
-        from PIL import ImageTk
-        preview_win = tk.Toplevel(self.root)
-        preview_win.title("AI Split Preview")
-        preview_win.geometry("600x800")
-        canvas = tk.Canvas(preview_win, bg="#222222")
-        scrollbar = tk.Scrollbar(preview_win, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg="#222222")
-        scrollable_frame.bind(
-            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        self._split_thumbnails = []  # Prevent garbage collection
-        for i, img in enumerate(split_images):
-            # Resize for preview if too large
-            max_w = 550
-            scale = min(1.0, max_w / img.width)
-            disp_img = img.resize((int(img.width * scale), int(img.height * scale)), Image.Resampling.LANCZOS)
-            img_tk = ImageTk.PhotoImage(disp_img)
-            self._split_thumbnails.append(img_tk)
-            label = tk.Label(scrollable_frame, image=img_tk, bg="#222222")
-            label.pack(padx=10, pady=10)
-            tk.Label(scrollable_frame, text=f"Split #{i+1} (height={img.height})", fg="white", bg="#222222").pack()
+    def _on_ai_split_scale_change(self, value):
+        # Map slider value (0-250) to multiplier (0.5-3.0)
+        self.ai_split_multiplier = 0.5 + (float(value) / 100.0)
+        self.ai_split_scale_label.configure(text=f"x{self.ai_split_multiplier:.2f}")
+        # Find the first left image boundary again for offset
+        left_boundary = None
+        for b in self.image_boundaries:
+            if b.get('type') == 'left':
+                left_boundary = b
+                break
+        if left_boundary is not None and self._ai_split_raw:
+            self._apply_ai_split_scaling(left_boundary['start'])
+
+    def _apply_ai_split_scaling(self, y_offset):
+        # Apply the multiplier to the raw AI split values and update split_lines_real
+        self.split_lines_real = [float(y) * self.ai_split_multiplier + y_offset for y in self._ai_split_raw]
+        self.split_lines_real.sort()
+        self.redraw_split_lines()
 
     def _create_image_canvas(self):
         self.canvas = Canvas(self.image_display_frame, bg="#2B2B2B", highlightthickness=0)
@@ -716,6 +699,14 @@ class PDFSlicerApp:
 
     def _toggle_split_halves(self):
         self.split_in_halves = self.split_halves_switch.get()
+
+    def _toggle_move_all_splits(self):
+        self.move_all_splits_mode = not self.move_all_splits_mode
+        if self.move_all_splits_mode:
+            self.move_all_splits_button.configure(text="Moving All Splits (Click to Stop)")
+        else:
+            self.move_all_splits_button.configure(text="Move All Splits")
+        self._move_all_splits_start_y = None
 
 # --- Main Application Execution ---
 if __name__ == "__main__":
