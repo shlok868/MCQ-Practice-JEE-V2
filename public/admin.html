@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Uploader Admin Panel</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background-color: #fff; padding: 2rem 3rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); width: 100%; max-width: 600px; box-sizing: border-box; }
+        h1, h2 { text-align: center; color: #1a73e8; }
+        #login-container, #admin-panel { display: flex; flex-direction: column; gap: 1rem; }
+        input[type="email"], input[type="password"], input[type="text"] { padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        button { padding: 12px 20px; border: none; border-radius: 4px; background-color: #1a73e8; color: white; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #155ab6; }
+        #logout-btn { background-color: #d93025; }
+        #logout-btn:hover { background-color: #a52714; }
+        .hidden { display: none !important; }
+        #log-output { margin-top: 1.5rem; background-color: #282c34; color: #abb2bf; padding: 1rem; border-radius: 4px; font-family: "Courier New", Courier, monospace; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; }
+        .log-info { color: #61afef; } .log-success { color: #98c379; } .log-error { color: #e06c75; } .log-warning { color: #e5c07b; }
+        .info-box { background-color: #e8f0fe; border-left: 4px solid #1a73e8; padding: 10px; margin-bottom: 1rem; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="login-container">
+            <h1>Admin Login</h1>
+            <input type="email" id="email" placeholder="Email (shlok@admin.com)" value="shlok@admin.com">
+            <input type="password" id="password" placeholder="Password">
+            <button id="login-btn">Login</button>
+        </div>
+
+        <div id="admin-panel" class="hidden">
+            <h2>Exam Uploader</h2>
+            <p>Welcome, <span id="admin-email"></span>!</p>
+            <div class="info-box"><strong>Instructions:</strong><ol><li>Enter a Google Drive folder link.</li><li>Enter the **parent location** (a Collection) where you want to create the new exam document.</li><li>The tool will create a new document in that location named after your Google Drive folder.</li></ol></div>
+            
+            <label for="drive-link">Google Drive Folder Link:</label>
+            <input type="text" id="drive-link" placeholder="https://drive.google.com/drive/folders/...">
+            
+            <label for="firestore-path">Parent Location (Collection Path):</label>
+            <input type="text" id="firestore-path" value="examdata/Physics/Module_Physics">
+            
+            <button id="process-btn">Process and Upload to Firestore</button>
+            <button id="logout-btn">Logout</button>
+            <div id="log-output">Logs will appear here...</div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyB1g8_jvDt5NSTHHf6Iz1mEaUAfWFHXhFc",
+            authDomain: "exam-practice-133.firebaseapp.com",
+            projectId: "exam-practice-133",
+            storageBucket: "exam-practice-133.appspot.com",
+            messagingSenderId: "360770636796",
+            appId: "1:360770636796:web:3c046ac1122c3d12df0079"
+        };
+        const GOOGLE_API_KEY = "AIzaSyAFT6r2nd9l6OEUkhPVCHDNMdqZFTxxRO8";
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const loginContainer = document.getElementById('login-container');
+        const adminPanel = document.getElementById('admin-panel');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const processBtn = document.getElementById('process-btn');
+        const adminEmailSpan = document.getElementById('admin-email');
+        const logOutput = document.getElementById('log-output');
+
+        auth.onAuthStateChanged(user => {
+            if (user && user.email === 'shlok@admin.com') {
+                loginContainer.classList.add('hidden');
+                adminPanel.classList.remove('hidden');
+                adminEmailSpan.textContent = user.email;
+                log('info', `Authentication successful. Welcome ${user.email}.`);
+            } else {
+                if (user) { auth.signOut(); }
+                loginContainer.classList.remove('hidden');
+                adminPanel.classList.add('hidden');
+            }
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => log('error', `Login Failed: ${error.message}`));
+        });
+
+        logoutBtn.addEventListener('click', () => { auth.signOut(); log('info', 'You have been logged out.'); });
+        
+        processBtn.addEventListener('click', async () => {
+            const driveLink = document.getElementById('drive-link').value.trim();
+            const firestoreParentPath = document.getElementById('firestore-path').value.trim().replace(/\/$/, "");
+            
+            clearLogs();
+            log('info', 'Starting process...');
+
+            if (!driveLink || !firestoreParentPath) return log('error', 'Google Drive Link and Parent Location Path cannot be empty.');
+            
+            // *** THE FINAL, CORRECT LOGIC ***
+            // The path you provide is the PARENT LOCATION. It MUST be a collection.
+            // A collection path MUST have an ODD number of parts.
+            if (firestoreParentPath.split('/').length % 2 === 0) {
+                 return log('error', `Invalid Location: '${firestoreParentPath}'. The parent location must be a COLLECTION (odd number of parts).`);
+            }
+
+            const folderId = extractFolderIdFromLink(driveLink);
+            if (!folderId) return log('error', 'Could not extract Folder ID from the link.');
+            log('info', `Extracted Google Drive Folder ID: ${folderId}`);
+            
+            processBtn.disabled = true;
+            processBtn.textContent = "Processing...";
+
+            try {
+                const folderName = await getGoogleDriveFolderName(folderId);
+                log('info', `Processing Google Drive folder named: "${folderName}"`);
+                
+                const files = await getGoogleDriveFiles(folderId);
+                if (!Array.isArray(files)) throw new Error("Could not retrieve file list from Google Drive.");
+
+                const ansFile = files.find(f => f.name.toLowerCase() === 'ans.json');
+                let questionImages = files.filter(f => f.name.match(/^q\d+\.png$/i));
+
+                if (questionImages.length === 0) throw new Error("No question images (q1.png, etc.) found.");
+                if (!ansFile) throw new Error("The 'ans.json' file was not found.");
+                
+                questionImages.sort((a, b) => {
+                    const numA = parseInt(a.name.match(/\d+/)[0], 10);
+                    const numB = parseInt(b.name.match(/\d+/)[0], 10);
+                    return numA - numB;
+                });
+                log('info', `Found and sorted ${questionImages.length} question images.`);
+
+                const answers = await fetchAndParseJson(ansFile.id);
+                log('info', 'Successfully parsed ans.json');
+
+                const questionsArray = [];
+                for (const imageFile of questionImages) {
+                    const questionNumber = imageFile.name.match(/\d+/)[0];
+                    if (answers[questionNumber]) {
+                        questionsArray.push({
+                            questionNumber: parseInt(questionNumber, 10),
+                            imageUrl: imageFile.webViewLink,
+                            answer: answers[questionNumber]
+                        });
+                    } else {
+                        log('warning', `No answer found for q${questionNumber}. Skipping.`);
+                    }
+                }
+                
+                if (questionsArray.length === 0) throw new Error("No valid questions could be matched with answers.");
+
+                // The GDrive folder name becomes the ID of the new document.
+                const newDocumentId = folderName.replace(/\s+/g, '_');
+                const examDocumentData = { title: folderName, questions: questionsArray };
+                
+                // Create a reference to the new document inside the parent location you specified.
+                const docRef = db.collection(firestoreParentPath).doc(newDocumentId);
+                const finalPath = `${firestoreParentPath}/${newDocumentId}`;
+
+                log('info', `Uploading ${questionsArray.length} questions to new document: "${finalPath}"`);
+                await docRef.set(examDocumentData);
+                log('success', `🎉 Successfully uploaded exam!`);
+
+            } catch (error) {
+                log('error', `An error occurred: ${error.message}`);
+                console.error(error);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = "Process and Upload to Firestore";
+            }
+        });
+
+        function log(type, message) { const logEntry = document.createElement('div'); logEntry.className = `log-${type}`; logEntry.textContent = `[${type.toUpperCase()}] ${message}`; logOutput.appendChild(logEntry); logOutput.scrollTop = logOutput.scrollHeight; }
+        function clearLogs() { logOutput.innerHTML = ''; }
+        function extractFolderIdFromLink(link) { const match = link.match(/folders\/([a-zA-Z0-9_-]+)/); return match ? match[1] : null; }
+        
+        async function getGoogleDriveFolderName(folderId) {
+            const url = `https://www.googleapis.com/drive/v3/files/${folderId}?key=${GOOGLE_API_KEY}&fields=name`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`GDrive API error (folder name): ${response.statusText}`);
+            const data = await response.json();
+            return data.name;
+        }
+        
+        async function getGoogleDriveFiles(folderId) {
+            const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false&key=${GOOGLE_API_KEY}&fields=files(id,name,webViewLink)`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`GDrive API error (list files): ${response.statusText}`);
+            const data = await response.json();
+            return data.files;
+        }
+
+        async function fetchAndParseJson(fileId) {
+            const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`GDrive API error (ans.json): ${response.statusText}`);
+            return response.json();
+        }
+    </script>
+</body>
+</html>
